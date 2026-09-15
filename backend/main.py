@@ -67,6 +67,15 @@ Respond ONLY with a valid JSON object with these exact fields:
 
 Use "other" for device_type only when the item genuinely does not fit any listed class.
 
+For brand and model: only state a specific model (e.g. "iPhone 17 Pro Max") if you can
+read it directly off the device, packaging, or an on-screen label, or if the design is
+unambiguous. If you are inferring the model purely from general shape/design and are not
+confident about the exact generation, say so — set model to your best guess followed by
+"(uncertain)", or "Unknown" if you have no reasonable guess, and lower confidence
+accordingly. Never state a specific model generation with high confidence unless you are
+actually sure; guessing an older, more familiar model when you don't recognize a newer
+design is a worse failure than admitting uncertainty.
+
 Grading criteria:
 - Flawless: Like new, no visible scratches, dents, or wear. Screen pristine.
 - Good: Minor scratches or light wear, fully functional appearance.
@@ -137,7 +146,7 @@ async def grade_device(files: list[UploadFile] = File(...)):
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-opus-5",
             max_tokens=1024,
             system=SYSTEM_PROMPT,
             messages=[
