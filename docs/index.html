@@ -285,6 +285,8 @@
 </div>
 
 <script>
+  const API_BASE = 'https://condition-grader-production.up.railway.app';
+
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
   const gradeBtn = document.getElementById('grade-btn');
@@ -330,7 +332,7 @@
     form.append('file', selectedFile);
 
     try {
-      const resp = await fetch('/grade', { method: 'POST', body: form });
+      const resp = await fetch(`${API_BASE}/grade`, { method: 'POST', body: form });
       const text = await resp.text();
 
       let data;

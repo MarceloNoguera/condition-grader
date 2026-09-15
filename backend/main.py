@@ -27,7 +27,7 @@ app.add_middleware(
 )
 
 # Serve frontend static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="docs"), name="static")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
@@ -77,7 +77,7 @@ class GradeResult(BaseModel):
 
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
+    return FileResponse("docs/index.html")
 
 
 @app.post("/grade", response_model=GradeResult)

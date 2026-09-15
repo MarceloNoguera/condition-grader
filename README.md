@@ -70,10 +70,18 @@ condition-grader/
 ├── backend/
 │   ├── main.py          # FastAPI app + Claude Vision integration
 │   └── requirements.txt
-├── static/
-│   └── index.html       # Frontend (served by FastAPI)
+├── docs/
+│   └── index.html       # Frontend (served by FastAPI, and by GitHub Pages)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
+
+## Deployment
+
+- **Backend**: deployed on [Railway](https://railway.app) from the `Dockerfile`, at
+  `https://condition-grader-production.up.railway.app`.
+- **Frontend**: `docs/index.html` is also published via GitHub Pages (repo Settings →
+  Pages → source: `main` branch, `/docs` folder). It calls the Railway backend directly
+  (see `API_BASE` at the top of the `<script>` block).
