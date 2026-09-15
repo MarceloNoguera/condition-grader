@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Device Condition Grader</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f0f13;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      color: #94a3b8;
+      margin-top: 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2d2d4e;
+      border-radius: 16px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 560px;
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #3d3d6b;
+      border-radius: 12px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: #6366f1;
+      background: rgba(99,102,241,0.05);
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .upload-zone p { color: #94a3b8; font-size: 0.9rem; }
+    .upload-zone strong { color: #a78bfa; }
+
+    #preview-wrap {
+      display: none;
+      margin-top: 1.25rem;
+      text-align: center;
+    }
+
+    #preview-wrap img {
+      max-height: 220px;
+      max-width: 100%;
+      border-radius: 10px;
+      border: 1px solid #2d2d4e;
+      object-fit: contain;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 1.25rem;
+      padding: 0.85rem;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner {
+      display: none;
+      text-align: center;
+      padding: 1.5rem 0;
+      color: #a78bfa;
+      font-size: 0.95rem;
+    }
+
+    .spinner::before {
+      content: '';
+      display: block;
+      width: 36px;
+      height: 36px;
+      border: 3px solid #2d2d4e;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 0.75rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Result */
+    #result { display: none; margin-top: 1.75rem; }
+
+    .grade-badge {
+      display: inline-block;
+      padding: 0.35rem 1.1rem;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      margin-bottom: 1rem;
+    }
+
+    .grade-Flawless { background: #064e3b; color: #6ee7b7; }
+    .grade-Good     { background: #1e3a5f; color: #93c5fd; }
+    .grade-Used     { background: #3b2106; color: #fcd34d; }
+    .grade-Damaged  { background: #4c0519; color: #fca5a5; }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid #2d2d4e;
+      font-size: 0.92rem;
+    }
+
+    .result-row:last-child { border-bottom: none; }
+    .result-row .label { color: #64748b; }
+    .result-row .value { color: #e2e8f0; font-weight: 500; text-align: right; max-width: 60%; }
+
+    .price-box {
+      margin-top: 1.25rem;
+      background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15));
+      border: 1px solid #4338ca;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+
+    .price-box .price-label { color: #94a3b8; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .price-box .price-value { font-size: 1.75rem; font-weight: 800; color: #a78bfa; margin: 0.3rem 0; }
+
+    .issues-list, .positives-list {
+      margin-top: 0.35rem;
+      padding-left: 1.1rem;
+    }
+
+    .issues-list li { color: #fca5a5; font-size: 0.88rem; margin-bottom: 0.2rem; }
+    .positives-list li { color: #6ee7b7; font-size: 0.88rem; margin-bottom: 0.2rem; }
+
+    .section-title {
+      color: #64748b;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin: 1rem 0 0.35rem;
+    }
+
+    .summary-box {
+      background: #12121e;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.88rem;
+      color: #94a3b8;
+      font-style: italic;
+      margin-top: 0.35rem;
+    }
+
+    .confidence-bar-wrap { width: 100%; background: #2d2d4e; border-radius: 999px; height: 6px; margin-top: 0.4rem; }
+    .confidence-bar { height: 6px; border-radius: 999px; background: linear-gradient(90deg, #6366f1, #a78bfa); }
+
+    .error-box {
+      display: none;
+      margin-top: 1rem;
+      background: #4c0519;
+      border: 1px solid #9f1239;
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      color: #fca5a5;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📱 Device Condition Grader</h1>
+  <p>Upload a photo of any device — get an instant AI grade & trade-in value</p>
+</header>
+
+<div class="card">
+  <div class="upload-zone" id="drop-zone">
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" />
+    <div class="upload-icon">📷</div>
+    <p><strong>Click to upload</strong> or drag & drop</p>
+    <p style="margin-top:0.3rem">JPEG, PNG or WEBP · Max 10 MB</p>
+  </div>
+
+  <div id="preview-wrap">
+    <img id="preview-img" src="" alt="Preview" />
+  </div>
+
+  <button class="btn" id="grade-btn" disabled>Grade this device</button>
+
+  <div class="spinner" id="spinner">Analyzing device condition with Claude Vision…</div>
+  <div class="error-box" id="error-box"></div>
+
+  <div id="result">
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+      <span class="grade-badge" id="grade-badge">—</span>
+      <div style="flex:1; min-width:120px;">
+        <div style="font-size:0.78rem; color:#64748b; margin-bottom:3px;">Confidence</div>
+        <div class="confidence-bar-wrap">
+          <div class="confidence-bar" id="conf-bar" style="width:0%"></div>
+        </div>
+        <div style="font-size:0.8rem; color:#94a3b8; margin-top:3px;" id="conf-text">0%</div>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <div class="result-row">
+        <span class="label">Device type</span>
+        <span class="value" id="r-type">—</span>
+      </div>
+      <div class="result-row">
+        <span class="label">Brand</span>
+        <span class="value" id="r-brand">—</span>
+      </div>
+      <div class="result-row">
+        <span class="label">Model</span>
+        <span class="value" id="r-model">—</span>
+      </div>
+    </div>
+
+    <div class="price-box">
+      <div class="price-label">Estimated trade-in value</div>
+      <div class="price-value" id="r-price">—</div>
+    </div>
+
+    <div id="positives-wrap">
+      <div class="section-title">✅ Positives</div>
+      <ul class="positives-list" id="r-positives"></ul>
+    </div>
+
+    <div id="issues-wrap">
+      <div class="section-title">⚠️ Issues detected</div>
+      <ul class="issues-list" id="r-issues"></ul>
+    </div>
+
+    <div class="section-title">🗒 Summary</div>
+    <div class="summary-box" id="r-summary"></div>
+  </div>
+</div>
+
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const gradeBtn = document.getElementById('grade-btn');
+  const spinner  = document.getElementById('spinner');
+  const errorBox = document.getElementById('error-box');
+  const result   = document.getElementById('result');
+  const previewWrap = document.getElementById('preview-wrap');
+  const previewImg  = document.getElementById('preview-img');
+
+  let selectedFile = null;
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadFile(fileInput.files[0]);
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+
+  function loadFile(file) {
+    selectedFile = file;
+    const url = URL.createObjectURL(file);
+    previewImg.src = url;
+    previewWrap.style.display = 'block';
+    gradeBtn.disabled = false;
+    result.style.display = 'none';
+    errorBox.style.display = 'none';
+  }
+
+  gradeBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    gradeBtn.disabled = true;
+    spinner.style.display = 'block';
+    result.style.display = 'none';
+    errorBox.style.display = 'none';
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    try {
+      const resp = await fetch('/grade', { method: 'POST', body: form });
+      const text = await resp.text();
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text.substring(0, 200) || 'Server returned a non-JSON response');
+      }
+
+      if (!resp.ok) {
+        throw new Error(data.detail || `Server error ${resp.status}`);
+      }
+
+      showResult(data);
+    } catch (err) {
+      errorBox.textContent = '❌ ' + err.message;
+      errorBox.style.display = 'block';
+    } finally {
+      spinner.style.display = 'none';
+      gradeBtn.disabled = false;
+    }
+  });
+
+  function showResult(d) {
+    const badge = document.getElementById('grade-badge');
+    badge.textContent = d.grade;
+    badge.className = 'grade-badge grade-' + d.grade;
+
+    document.getElementById('conf-bar').style.width  = d.confidence + '%';
+    document.getElementById('conf-text').textContent = d.confidence + '%';
+    document.getElementById('r-type').textContent  = capitalize(d.device_type);
+    document.getElementById('r-brand').textContent = d.brand;
+    document.getElementById('r-model').textContent = d.model;
+    document.getElementById('r-price').textContent = `$${d.price_min} – $${d.price_max} USD`;
+    document.getElementById('r-summary').textContent = d.summary;
+
+    const positivesList = document.getElementById('r-positives');
+    positivesList.innerHTML = '';
+    d.positives.forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = p;
+      positivesList.appendChild(li);
+    });
+    document.getElementById('positives-wrap').style.display = d.positives.length ? 'block' : 'none';
+
+    const issuesList = document.getElementById('r-issues');
+    issuesList.innerHTML = '';
+    d.issues.forEach(i => {
+      const li = document.createElement('li');
+      li.textContent = i;
+      issuesList.appendChild(li);
+    });
+    document.getElementById('issues-wrap').style.display = d.issues.length ? 'block' : 'none';
+
+    result.style.display = 'block';
+  }
+
+  function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  grader:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    restart: unless-stopped
