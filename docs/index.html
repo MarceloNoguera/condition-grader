@@ -85,15 +85,25 @@
   .drop b{display:block;font-weight:500;font-size:.95rem;margin-bottom:4px}
   .drop small{color:var(--dim);font-size:.8rem}
 
-  .preview{display:none;margin-top:18px;position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border-2);background:var(--deep)}
-  .preview img{display:block;width:100%;max-height:270px;object-fit:contain}
-  .preview button{
-    position:absolute;top:10px;right:10px;border:1px solid var(--border-2);
-    background:rgba(10,14,13,.86);backdrop-filter:blur(6px);color:var(--fg-2);
-    border-radius:999px;padding:5px 12px;font-size:.74rem;cursor:pointer;font-family:inherit;
-    transition:color .16s,border-color .16s;
+  .shots{display:none;margin-top:18px}
+  .shots.on{display:block}
+  .shots-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .shots-head button{
+    border:none;background:none;color:var(--muted);font-family:inherit;font-size:.78rem;
+    cursor:pointer;padding:0;transition:color .16s;
   }
-  .preview button:hover{color:var(--fg);border-color:var(--dim)}
+  .shots-head button:hover{color:var(--green)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+  .shot{position:relative;aspect-ratio:1;border-radius:var(--r);overflow:hidden;border:1px solid var(--border-2);background:var(--deep)}
+  .shot img{display:block;width:100%;height:100%;object-fit:cover}
+  .shot button{
+    position:absolute;top:4px;right:4px;width:20px;height:20px;line-height:1;
+    border:1px solid var(--border-2);background:rgba(10,14,13,.88);
+    backdrop-filter:blur(6px);color:var(--fg-2);border-radius:50%;
+    font-size:.72rem;cursor:pointer;font-family:inherit;padding:0;
+    display:grid;place-items:center;transition:color .16s,border-color .16s;
+  }
+  .shot button:hover{color:#fda4af;border-color:#fda4af}
 
   .go{
     display:block;width:100%;margin-top:18px;padding:14px;
@@ -192,9 +202,9 @@
   <div class="intro">
     <h1>Grade any device from <span>a single photo.</span></h1>
     <p>
-      Upload a photo of a phone, laptop or tablet. A multimodal model assesses its physical
-      condition against a fixed taxonomy and returns a grade, the defects it found, and an
-      estimated trade-in value.
+      Upload photos of a phone, laptop, tablet or camera — front, back and any damage. A
+      multimodal model assesses its physical condition across every view against a fixed
+      taxonomy, and returns a grade, the defects it found, and an estimated trade-in value.
     </p>
   </div>
 
@@ -204,17 +214,20 @@
       <span class="lbl">1 · Upload a photo</span>
 
       <div class="drop" id="drop">
-        <input type="file" id="file" accept="image/jpeg,image/png,image/webp" />
+        <input type="file" id="file" accept="image/jpeg,image/png,image/webp" multiple />
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v13"/>
         </svg>
         <b>Click to upload or drag and drop</b>
-        <small>JPEG, PNG or WEBP · up to 10 MB</small>
+        <small>Up to 6 photos of the same device · JPEG, PNG or WEBP · 10 MB each</small>
       </div>
 
-      <div class="preview" id="preview">
-        <img id="previewImg" src="" alt="Selected device photo" />
-        <button type="button" id="clear">Replace</button>
+      <div class="shots" id="shots">
+        <div class="shots-head">
+          <span class="lbl" id="shotCount"></span>
+          <button type="button" id="clearAll">Clear all</button>
+        </div>
+        <div class="grid" id="grid"></div>
       </div>
 
       <button class="go" id="go" disabled>Grade this device</button>
@@ -284,17 +297,18 @@
 
   const drop = document.getElementById('drop');
   const fileInput = document.getElementById('file');
-  const preview = document.getElementById('preview');
-  const previewImg = document.getElementById('previewImg');
-  const clearBtn = document.getElementById('clear');
+  const shotsWrap = document.getElementById('shots');
+  const grid = document.getElementById('grid');
+  const shotCount = document.getElementById('shotCount');
+  const clearAllBtn = document.getElementById('clearAll');
   const go = document.getElementById('go');
   const err = document.getElementById('err');
   const paneEmpty = document.getElementById('empty');
   const paneLoading = document.getElementById('loading');
   const paneResult = document.getElementById('result');
 
-  let selected = null;
-  let objectUrl = null;
+  const MAX_PHOTOS = 6;
+  let shots = [];   // { file, url }
 
   function show(pane) {
     paneEmpty.classList.toggle('on', pane === 'empty');
@@ -302,43 +316,92 @@
     paneResult.style.display = pane === 'result' ? 'block' : 'none';
   }
 
-  function pickFile(file) {
-    if (!file) return;
-    selected = file;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    objectUrl = URL.createObjectURL(file);
-    previewImg.src = objectUrl;
-    preview.style.display = 'block';
-    go.disabled = false;
-    err.style.display = 'none';
-    show('empty');
+  function addFiles(fileList) {
+    const incoming = [...fileList].filter((f) => f && f.type.startsWith('image/'));
+    if (!incoming.length) return;
+
+    for (const file of incoming) {
+      if (shots.length >= MAX_PHOTOS) {
+        fail(`Up to ${MAX_PHOTOS} photos per device — extra files were ignored.`);
+        break;
+      }
+      // Same picture dropped twice would otherwise cost an extra image in the request.
+      if (shots.some((s) => s.file.name === file.name && s.file.size === file.size)) continue;
+      shots.push({ file, url: URL.createObjectURL(file) });
+    }
+    render();
   }
 
-  fileInput.addEventListener('change', () => pickFile(fileInput.files[0]));
+  function removeAt(index) {
+    URL.revokeObjectURL(shots[index].url);
+    shots.splice(index, 1);
+    render();
+  }
+
+  function clearAll() {
+    shots.forEach((s) => URL.revokeObjectURL(s.url));
+    shots = [];
+    render();
+  }
+
+  function render() {
+    grid.innerHTML = '';
+    shots.forEach((shot, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'shot';
+
+      const img = document.createElement('img');
+      img.src = shot.url;
+      img.alt = `Device photo ${i + 1}`;
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = 'Remove this photo';
+      remove.addEventListener('click', () => removeAt(i));
+
+      cell.append(img, remove);
+      grid.appendChild(cell);
+    });
+
+    shotsWrap.classList.toggle('on', shots.length > 0);
+    shotCount.textContent = `${shots.length} of ${MAX_PHOTOS} photos`;
+    go.disabled = shots.length === 0;
+    go.textContent = shots.length > 1
+      ? `Grade this device (${shots.length} photos)`
+      : 'Grade this device';
+    if (shots.length) show('empty');
+  }
+
+  function fail(message) {
+    err.textContent = message;
+    err.style.display = 'block';
+  }
+
+  fileInput.addEventListener('change', () => {
+    addFiles(fileInput.files);
+    fileInput.value = '';   // so picking the same file again still fires change
+  });
 
   drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', (e) => {
     e.preventDefault();
     drop.classList.remove('over');
-    pickFile(e.dataTransfer.files[0]);
+    addFiles(e.dataTransfer.files);
   });
 
-  clearBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    fileInput.value = '';
-    fileInput.click();
-  });
+  clearAllBtn.addEventListener('click', clearAll);
 
   go.addEventListener('click', async () => {
-    if (!selected) return;
+    if (!shots.length) return;
 
     go.disabled = true;
     err.style.display = 'none';
     show('loading');
 
     const form = new FormData();
-    form.append('file', selected);
+    shots.forEach((shot) => form.append('files', shot.file));
 
     try {
       const resp = await fetch(`${API_BASE}/grade`, { method: 'POST', body: form });
@@ -352,18 +415,17 @@
       }
       if (!resp.ok) throw new Error(data.detail || `Server error ${resp.status}`);
 
-      render(data);
+      renderResult(data);
       show('result');
     } catch (e) {
-      err.textContent = e.message;
-      err.style.display = 'block';
+      fail(e.message);
       show('empty');
     } finally {
       go.disabled = false;
     }
   });
 
-  function render(d) {
+  function renderResult(d) {
     const grade = document.getElementById('grade');
     grade.textContent = d.grade;
     grade.className = 'grade g-' + d.grade;

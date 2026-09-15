@@ -73,6 +73,12 @@ Grading criteria:
 - Used: Visible scratches, scuffs, or moderate wear. No cracks.
 - Damaged: Cracked screen, broken parts, heavy damage.
 
+When several photos are supplied they show one device from different angles. Grade the
+device once, and let the worst defect visible in any single view set the grade — a
+pristine front does not offset a cracked back. List each distinct defect once, even if
+it appears in several photos, and note in the summary if an angle is missing that would
+be needed to grade with confidence.
+
 Be strict and accurate. Do not add any text outside the JSON."""
 
 
@@ -94,21 +100,38 @@ async def root():
     return FileResponse("docs/index.html")
 
 
+ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_IMAGES = 6
+
+
 @app.post("/grade", response_model=GradeResult)
-async def grade_device(file: UploadFile = File(...)):
+async def grade_device(files: list[UploadFile] = File(...)):
     if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
 
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WEBP or GIF images are accepted")
+    if not files:
+        raise HTTPException(status_code=400, detail="Upload at least one photo")
+    if len(files) > MAX_IMAGES:
+        raise HTTPException(status_code=400, detail=f"Up to {MAX_IMAGES} photos per device")
 
-    image_data = await file.read()
-    if len(image_data) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image must be under 10MB")
+    image_blocks = []
+    for upload in files:
+        if upload.content_type not in ALLOWED_TYPES:
+            raise HTTPException(status_code=400, detail="Only JPEG, PNG, WEBP or GIF images are accepted")
 
-    b64_image = base64.standard_b64encode(image_data).decode("utf-8")
-    media_type = file.content_type
+        image_data = await upload.read()
+        if len(image_data) > MAX_IMAGE_BYTES:
+            raise HTTPException(status_code=400, detail="Each image must be under 10MB")
+
+        image_blocks.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": upload.content_type,
+                "data": base64.standard_b64encode(image_data).decode("utf-8"),
+            },
+        })
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -120,18 +143,14 @@ async def grade_device(file: UploadFile = File(...)):
             messages=[
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": b64_image,
-                            },
-                        },
+                    "content": image_blocks + [
                         {
                             "type": "text",
-                            "text": "Grade this device's physical condition and respond with the JSON only."
+                            "text": (
+                                f"These {len(image_blocks)} photo(s) all show the SAME device from "
+                                "different angles. Grade it once, considering every view together. "
+                                "Respond with the JSON only."
+                            ),
                         }
                     ],
                 }
