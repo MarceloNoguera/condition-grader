@@ -31,19 +31,31 @@ app.mount("/static", StaticFiles(directory="docs"), name="static")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
+# Indicative ranges per device class and grade. They deliberately ignore brand and
+# model, so a flagship and a budget handset of the same class price identically —
+# the device-pricing project replaces this table with a model fitted on sold
+# listings. Until then, keeping a class here is still far better than letting it
+# fall through to "other", which is what priced a Canon EOS M50 at 100-200.
 PRICING = {
-    "smartphone": {"Flawless": (250, 320), "Good": (150, 220), "Used": (60, 130), "Damaged": (10, 50)},
+    "smartphone": {"Flawless": (250, 320), "Good": (150, 220), "Used": (60, 130),  "Damaged": (10, 50)},
     "laptop":     {"Flawless": (500, 700), "Good": (300, 480), "Used": (150, 280), "Damaged": (30, 100)},
-    "tablet":     {"Flawless": (200, 300), "Good": (120, 190), "Used": (50, 110), "Damaged": (10, 40)},
-    "unknown":    {"Flawless": (100, 200), "Good": (60, 120),  "Used": (20, 60),  "Damaged": (5, 20)},
+    "tablet":     {"Flawless": (200, 300), "Good": (120, 190), "Used": (50, 110),  "Damaged": (10, 40)},
+    "camera":     {"Flawless": (300, 550), "Good": (200, 380), "Used": (100, 220), "Damaged": (30, 90)},
+    "smartwatch": {"Flawless": (120, 220), "Good": (70, 140),  "Used": (30, 80),   "Damaged": (10, 30)},
+    "console":    {"Flawless": (200, 350), "Good": (140, 240), "Used": (70, 150),  "Damaged": (20, 60)},
+    "headphones": {"Flawless": (80, 180),  "Good": (50, 110),  "Used": (20, 60),   "Damaged": (5, 25)},
+    "monitor":    {"Flawless": (90, 200),  "Good": (60, 130),  "Used": (25, 70),   "Damaged": (10, 30)},
+    "other":      {"Flawless": (100, 200), "Good": (60, 120),  "Used": (20, 60),   "Damaged": (5, 20)},
 }
 
-SYSTEM_PROMPT = """You are an expert electronics grader for a trade-in platform.
+DEVICE_TYPES = [t for t in PRICING if t != "other"]
+
+SYSTEM_PROMPT = f"""You are an expert electronics grader for a trade-in platform.
 Analyze the provided image of a used electronic device and grade its physical condition.
 
 Respond ONLY with a valid JSON object with these exact fields:
-{
-  "device_type": "smartphone | laptop | tablet | unknown",
+{{
+  "device_type": "{' | '.join(DEVICE_TYPES)} | other",
   "brand": "detected brand or Unknown",
   "model": "detected model or Unknown",
   "grade": "Flawless | Good | Used | Damaged",
@@ -51,7 +63,9 @@ Respond ONLY with a valid JSON object with these exact fields:
   "issues": ["list of detected physical issues, empty array if none"],
   "positives": ["list of positive condition notes"],
   "summary": "One sentence summary of the device condition"
-}
+}}
+
+Use "other" for device_type only when the item genuinely does not fit any listed class.
 
 Grading criteria:
 - Flawless: Like new, no visible scratches, dents, or wear. Screen pristine.
@@ -141,8 +155,8 @@ async def grade_device(file: UploadFile = File(...)):
         raise HTTPException(status_code=502, detail="Could not parse model response as JSON")
 
     grade = data.get("grade", "Used")
-    device_type = data.get("device_type", "unknown")
-    pricing = PRICING.get(device_type, PRICING["unknown"])
+    device_type = data.get("device_type", "other")
+    pricing = PRICING.get(device_type, PRICING["other"])
     price_range = pricing.get(grade, pricing["Used"])
 
     return GradeResult(
