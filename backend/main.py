@@ -168,7 +168,10 @@ async def grade_device(files: list[UploadFile] = File(...)):
     except anthropic.APIError as e:
         raise HTTPException(status_code=502, detail=f"Claude API error: {str(e)}")
 
-    raw = message.content[0].text.strip()
+    text_block = next((block for block in message.content if block.type == "text"), None)
+    if text_block is None:
+        raise HTTPException(status_code=502, detail="Claude response contained no text block")
+    raw = text_block.text.strip()
 
     # Clean markdown code blocks if present
     if raw.startswith("```"):
