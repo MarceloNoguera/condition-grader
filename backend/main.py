@@ -2,7 +2,7 @@ import os
 import base64
 import json
 import traceback
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,14 +67,23 @@ Respond ONLY with a valid JSON object with these exact fields:
 
 Use "other" for device_type only when the item genuinely does not fit any listed class.
 
-For brand and model: only state a specific model (e.g. "iPhone 17 Pro Max") if you can
-read it directly off the device, packaging, or an on-screen label, or if the design is
-unambiguous. If you are inferring the model purely from general shape/design and are not
-confident about the exact generation, say so — set model to your best guess followed by
-"(uncertain)", or "Unknown" if you have no reasonable guess, and lower confidence
-accordingly. Never state a specific model generation with high confidence unless you are
-actually sure; guessing an older, more familiar model when you don't recognize a newer
-design is a worse failure than admitting uncertainty.
+For brand and model, follow this rule strictly — it does not depend on how confident you
+feel: a specific generation or number (e.g. "iPhone 17 Pro Max", "Galaxy S24") may ONLY
+be stated if it is actually legible in the image — on-screen text, a settings/about
+page, a label, engraving, or box/packaging. Recent phones within the same product line
+look nearly identical from the outside, so visual shape/design alone is NOT a valid basis
+for naming a specific generation, no matter how sure it looks. If no such text is
+visible, set model to the general product line without a generation number, e.g. "iPhone
+(model unconfirmed)" or "Galaxy S-series (model unconfirmed)", never a specific guessed
+number. This rule overrides your own visual impression — do not name a generation "by
+eye".
+
+The user may also supply a text description of the device alongside the photos. Treat
+any brand, model, color or spec detail stated there as reliable — use it directly for
+the brand and model fields, overriding the legibility rule above, since the user knows
+what they own better than a photo can show. The description says nothing about physical
+condition, though: issues, positives, grade and confidence must still come only from
+what is actually visible in the photos, never from the description.
 
 Grading criteria:
 - Flawless: Like new, no visible scratches, dents, or wear. Screen pristine.
@@ -114,8 +123,11 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGES = 6
 
 
+MAX_DESCRIPTION_CHARS = 300
+
+
 @app.post("/grade", response_model=GradeResult)
-async def grade_device(files: list[UploadFile] = File(...)):
+async def grade_device(files: list[UploadFile] = File(...), description: str | None = Form(None)):
     if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
 
@@ -144,6 +156,11 @@ async def grade_device(files: list[UploadFile] = File(...)):
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+    description = (description or "").strip()[:MAX_DESCRIPTION_CHARS]
+    description_line = (
+        f'\n\nUser-provided description of the device: "{description}"' if description else ""
+    )
+
     try:
         message = client.messages.create(
             model="claude-opus-5",
@@ -159,6 +176,7 @@ async def grade_device(files: list[UploadFile] = File(...)):
                                 f"These {len(image_blocks)} photo(s) all show the SAME device from "
                                 "different angles. Grade it once, considering every view together. "
                                 "Respond with the JSON only."
+                                f"{description_line}"
                             ),
                         }
                     ],

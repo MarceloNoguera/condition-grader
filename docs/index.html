@@ -105,6 +105,16 @@
   }
   .shot button:hover{color:#fda4af;border-color:#fda4af}
 
+  .desc{margin-top:18px}
+  .desc > .lbl{display:block;margin-bottom:9px}
+  .desc textarea{
+    width:100%;resize:vertical;min-height:60px;padding:12px 14px;border-radius:var(--r);
+    border:1px solid var(--border-2);background:var(--deep);color:var(--fg);
+    font-family:inherit;font-size:.86rem;line-height:1.5;transition:border-color .18s;
+  }
+  .desc textarea:focus{outline:none;border-color:var(--green)}
+  .desc textarea::placeholder{color:var(--dim)}
+
   .go{
     display:block;width:100%;margin-top:18px;padding:14px;
     border:none;border-radius:999px;font-family:inherit;font-size:.95rem;font-weight:500;
@@ -228,6 +238,11 @@
           <button type="button" id="clearAll">Clear all</button>
         </div>
         <div class="grid" id="grid"></div>
+      </div>
+
+      <div class="desc">
+        <span class="lbl">Optional · description</span>
+        <textarea id="description" maxlength="300" placeholder="Anything you know about the device — brand, exact model, color, storage. Helps when the model can't be read off the photo alone."></textarea>
       </div>
 
       <button class="go" id="go" disabled>Grade this device</button>
@@ -402,6 +417,8 @@
 
     const form = new FormData();
     shots.forEach((shot) => form.append('files', shot.file));
+    const description = document.getElementById('description').value.trim();
+    if (description) form.append('description', description);
 
     try {
       const resp = await fetch(`${API_BASE}/grade`, { method: 'POST', body: form });
